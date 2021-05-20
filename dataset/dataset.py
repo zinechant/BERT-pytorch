@@ -1,4 +1,5 @@
 from torch.utils.data import Dataset
+import pdb
 import tqdm
 import torch
 import random
@@ -16,7 +17,8 @@ class BERTDataset(Dataset):
 
         with open(corpus_path, "r", encoding=encoding) as f:
             if self.corpus_lines is None and not on_memory:
-                for _ in tqdm.tqdm(f, desc="Loading Dataset", total=corpus_lines):
+                self.corpus_lines = 0
+                for _ in tqdm.tqdm(f, desc="Loading Dataset", total=None):
                     self.corpus_lines += 1
 
             if on_memory:
@@ -28,8 +30,8 @@ class BERTDataset(Dataset):
             self.file = open(corpus_path, "r", encoding=encoding)
             self.random_file = open(corpus_path, "r", encoding=encoding)
 
-            for _ in range(random.randint(self.corpus_lines if self.corpus_lines < 1000 else 1000)):
-                self.random_file.__next__()
+            for _ in range(random.randint(0, self.corpus_lines if self.corpus_lines < 1000 else 1000)):
+                self.random_file.readline()
 
     def __len__(self):
         return self.corpus_lines
@@ -102,12 +104,13 @@ class BERTDataset(Dataset):
         if self.on_memory:
             return self.lines[item][0], self.lines[item][1]
         else:
-            line = self.file.__next__()
+            line = self.file.readline()
             if line is None:
                 self.file.close()
                 self.file = open(self.corpus_path, "r", encoding=self.encoding)
-                line = self.file.__next__()
+                line = self.file.readline()
 
+            assert "\t" in line, line
             t1, t2 = line[:-1].split("\t")
             return t1, t2
 
@@ -115,11 +118,12 @@ class BERTDataset(Dataset):
         if self.on_memory:
             return self.lines[random.randrange(len(self.lines))][1]
 
-        line = self.file.__next__()
+        line = self.random_file.readline()
         if line is None:
-            self.file.close()
-            self.file = open(self.corpus_path, "r", encoding=self.encoding)
-            for _ in range(random.randint(self.corpus_lines if self.corpus_lines < 1000 else 1000)):
-                self.random_file.__next__()
-            line = self.random_file.__next__()
+            self.random_file.close()
+            self.random_file = open(self.corpus_path, "r", encoding=self.encoding)
+            for _ in range(random.randint(1, self.corpus_lines if self.corpus_lines < 1000 else 1000)):
+                self.random_file.readline()
+            line = self.random_file.readline()
+        assert "\t" in line, line
         return line[:-1].split("\t")[1]

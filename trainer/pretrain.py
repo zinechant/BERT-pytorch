@@ -7,7 +7,17 @@ from ..model import BERTLM, BERT
 from .optim_schedule import ScheduledOptim
 
 import tqdm
+import numpy
 
+def hook(arr, iNo):
+    def trace(module, input, output):
+        if iNo:
+            arr.append(input[0].cpu().detach().numpy())
+            print(input[0].shape)
+        else:
+            arr.append(output[0].cpu().detach().numpy())
+            print(output[0].shape)
+    return trace
 
 class BERTTrainer:
     """
@@ -65,13 +75,13 @@ class BERTTrainer:
 
         print("Total Parameters:", sum([p.nelement() for p in self.model.parameters()]))
 
-    def train(self, epoch):
-        self.iteration(epoch, self.train_data)
+    def train(self, epoch, output_path):
+        self.iteration(epoch, self.train_data, output_path)
 
     def test(self, epoch):
-        self.iteration(epoch, self.test_data, train=False)
+        self.iteration(epoch, self.test_data, None, train=False)
 
-    def iteration(self, epoch, data_loader, train=True):
+    def iteration(self, epoch, data_loader, output_path, train=True):
         """
         loop over the data_loader for training or testing
         if on train status, backward operation is activated
@@ -94,7 +104,23 @@ class BERTTrainer:
         total_correct = 0
         total_element = 0
 
+        if output_path:
+            handles = []
+            arrs = [[], []]
+            for l, layer in enumerate(self.bert.transformer_blocks):
+                handles.append(layer.register_forward_hook(hook(arrs[0], True)))
+                handles.append(layer.register_full_backward_hook(hook(arrs[1], True)))
+            # handles.append(layer.register_forward_hook(hook(arrs[0], False)))
+
         for i, data in data_iter:
+            if output_path and (i == 10):
+                for handle in handles:
+                    handle.remove()
+                arr = numpy.array(arrs)
+                print("[TRACE]: " + str(arr.shape))
+                with open(output_path + ("_ep%d.trace" % epoch), "wb") as no:
+                    numpy.save(no, arr)
+
             # 0. batch_data will be sent into the device(GPU or cpu)
             data = {key: value.to(self.device) for key, value in data.items()}
 

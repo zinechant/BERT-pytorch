@@ -43,6 +43,6 @@ class BERT(nn.Module):
 
         # running over multiple transformer blocks
         for transformer in self.transformer_blocks:
-            x = transformer.forward(x, mask)
+            x = transformer(x, mask)
 
         return x
