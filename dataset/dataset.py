@@ -105,7 +105,7 @@ class BERTDataset(Dataset):
             return self.lines[item][0], self.lines[item][1]
         else:
             line = self.file.readline()
-            if line is None:
+            if not line:
                 self.file.close()
                 self.file = open(self.corpus_path, "r", encoding=self.encoding)
                 line = self.file.readline()
@@ -119,7 +119,7 @@ class BERTDataset(Dataset):
             return self.lines[random.randrange(len(self.lines))][1]
 
         line = self.random_file.readline()
-        if line is None:
+        if not line:
             self.random_file.close()
             self.random_file = open(self.corpus_path, "r", encoding=self.encoding)
             for _ in range(random.randint(1, self.corpus_lines if self.corpus_lines < 1000 else 1000)):

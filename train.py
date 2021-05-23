@@ -1,5 +1,8 @@
 import argparse
+import re
+import os
 
+import torch
 from torch.utils.data import DataLoader
 
 from .model import BERT
@@ -22,13 +25,14 @@ if __name__ == "__main__":
 
     parser.add_argument("-b", "--batch_size", type=int, default=128, help="number of batch_size")
     parser.add_argument("-e", "--epochs", type=int, default=10, help="number of epochs")
-    parser.add_argument("-w", "--num_workers", type=int, default=1, help="dataloader worker size")
+    parser.add_argument("-w", "--num_workers", type=int, default=5, help="dataloader worker size")
 
+    parser.add_argument("--old_model", type=str, default=None, help="previously trained model")
     parser.add_argument("--with_cuda", type=bool, default=True, help="training with CUDA: true, or false")
     parser.add_argument("--log_freq", type=int, default=10, help="printing loss every n iter: setting n")
     parser.add_argument("--corpus_lines", type=int, default=None, help="total number of lines in corpus")
     parser.add_argument("--cuda_devices", type=int, nargs='+', default=None, help="CUDA device ids")
-    parser.add_argument("--on_memory", type=bool, default=False, help="Loading on memory: true or false")
+    parser.add_argument("--on_memory", type=bool, default=True, help="Loading on memory: true or false")
 
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate of adam")
     parser.add_argument("--adam_weight_decay", type=float, default=0.01, help="weight_decay of adam")
@@ -57,13 +61,21 @@ if __name__ == "__main__":
     print("Building BERT model")
     bert = BERT(len(vocab), hidden=args.hidden, n_layers=args.layers, attn_heads=args.attn_heads)
 
+    sepoch = 0
+    if args.old_model and os.path.exists(args.old_model):
+        bert.load_state_dict(torch.load(args.old_model))
+        sepoch = int(re.match(r"bert\.ep(\d+)", os.path.split(args.old_model)[-1]).groups()[0]) + 1
+        print("Starting from epoch %d" % sepoch)
+
     print("Creating BERT Trainer")
     trainer = BERTTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=test_data_loader,
                           lr=args.lr, betas=(args.adam_beta1, args.adam_beta2), weight_decay=args.adam_weight_decay,
                           with_cuda=args.with_cuda, cuda_devices=args.cuda_devices, log_freq=args.log_freq)
 
+
+
     print("Training Start")
-    for epoch in range(args.epochs):
+    for epoch in range(sepoch, args.epochs):
         trainer.train(epoch, args.output_path)
         trainer.save(epoch, args.output_path)
 

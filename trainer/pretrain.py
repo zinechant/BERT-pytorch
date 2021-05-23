@@ -9,13 +9,15 @@ from .optim_schedule import ScheduledOptim
 import tqdm
 import numpy
 
-def hook(arr, iNo):
+def hook(arr, l, iNo):
     def trace(module, input, output):
         if iNo:
-            arr.append(input[0].cpu().detach().numpy())
+            cid = input[0].get_device()
+            arr[l][cid].append(input[0].cpu().detach().numpy())
             print(input[0].shape)
         else:
-            arr.append(output[0].cpu().detach().numpy())
+            cid = output[0].get_device()
+            arr[l][cid].append(output[0].cpu().detach().numpy())
             print(output[0].shape)
     return trace
 
@@ -106,10 +108,13 @@ class BERTTrainer:
 
         if output_path:
             handles = []
-            arrs = [[], []]
+            ls = range(len(self.bert.transformer_blocks))
+            cs = range(torch.cuda.device_count())
+            arrs = [[[[] for c in cs] for l in ls],
+                    [[[] for c in cs] for l in ls]]
             for l, layer in enumerate(self.bert.transformer_blocks):
-                handles.append(layer.register_forward_hook(hook(arrs[0], True)))
-                handles.append(layer.register_full_backward_hook(hook(arrs[1], True)))
+                handles.append(layer.register_forward_hook(hook(arrs[0], l, True)))
+                handles.append(layer.register_full_backward_hook(hook(arrs[1], l, True)))
             # handles.append(layer.register_forward_hook(hook(arrs[0], False)))
 
         for i, data in data_iter:
@@ -171,7 +176,6 @@ class BERTTrainer:
         :return: final_output_path
         """
         output_path = file_path + ".ep%d" % epoch
-        torch.save(self.bert.cpu(), output_path)
-        self.bert.to(self.device)
+        torch.save(self.bert.state_dict(), output_path)
         print("EP:%d Model Saved on:" % epoch, output_path)
         return output_path
